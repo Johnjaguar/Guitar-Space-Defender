@@ -15,6 +15,7 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+    scroll-behavior: smooth;
 }
 
 /* Base Styles */
@@ -68,16 +69,6 @@ body {
     100% { transform: translateY(50%); }
 }
 
-/* Game Canvas */
-#gameCanvas {
-    background-color: rgba(0, 0, 0, 0.3);
-    border: 2px solid var(--primary);
-    border-radius: 10px;
-    box-shadow: 0 0 20px rgba(96, 165, 250, 0.3);
-    margin: 1rem 0;
-    display: block;
-}
-
 /* Game Container */
 .game-container {
     width: 100%;
@@ -85,49 +76,59 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
+    padding: 1rem;
     position: relative;
     z-index: 2;
+    margin: 0 auto;
 }
 
-/* Header */
-.game-header {
-    text-align: center;
-    margin-bottom: 1rem;
+/* When game is active, adjust container padding */
+.game-running .game-container {
+    padding-top: 10px;
+    padding-bottom: 20px;
+}
+
+/* Game Canvas */
+#gameCanvas {
     width: 100%;
-}
-
-.game-title {
-    font-family: 'Orbitron', sans-serif;
-    font-size: 2.5rem;
-    background: linear-gradient(90deg, var(--primary), var(--accent));
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    text-shadow: 0 2px 10px rgba(96, 165, 250, 0.2);
-    margin-bottom: 0.5rem;
-}
-
-.game-subtitle {
-    font-size: 1rem;
-    color: var(--text-secondary);
-    margin-bottom: 1rem;
+    max-width: 1000px;
+    height: auto;
+    background-color: rgba(0, 0, 0, 0.3);
+    border: 2px solid var(--primary);
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(96, 165, 250, 0.3);
+    margin: 1rem auto;
+    display: block;
+    scroll-margin-top: 2rem;
 }
 
 /* Controls and Status */
 .game-controls {
     display: flex;
     justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
     width: 100%;
+    max-width: 1000px;
     margin-bottom: 1rem;
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 10px;
+    padding: 1rem;
+    position: sticky;
+    top: 10px;
+    z-index: 10;
 }
 
 .control-panel, .status-panel {
+    flex: 1;
+    min-width: 0;
+    max-width: 48%;
     background: rgba(15, 23, 42, 0.8);
     backdrop-filter: blur(10px);
     border: 1px solid rgba(96, 165, 250, 0.2);
     border-radius: 10px;
     padding: 1rem;
-    width: 48%;
 }
 
 .panel-title {
@@ -366,16 +367,63 @@ body {
 
 /* Responsive Adjustments */
 @media (max-width: 768px) {
+    .game-container {
+        padding: 0.5rem;
+    }
+    
     .game-controls {
         flex-direction: column;
+        padding: 0.75rem;
     }
     
     .control-panel, .status-panel {
         width: 100%;
-        margin-bottom: 1rem;
+        max-width: 100%;
+        margin-bottom: 0.75rem;
     }
     
     .game-title {
-        font-size: 2rem;
+        font-size: 1.75rem;
     }
+    
+    #gameCanvas {
+        margin: 0.5rem auto;
+        border-radius: 8px;
+    }
+}
+
+/* Ensure proper scrolling behavior */
+html {
+    scroll-behavior: smooth;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Fix sticky positioning */
+.game-controls.sticky {
+    position: -webkit-sticky;
+    position: sticky;
+    top: 10px;
+    background: rgba(15, 23, 42, 0.98);
+    backdrop-filter: blur(15px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.3s ease;
+}
+
+/* Ensure canvas maintains aspect ratio */
+.canvas-container {
+    width: 100%;
+    max-width: 1000px;
+    margin: 0 auto;
+    position: relative;
+    padding-top: 60%; /* 5:3 aspect ratio */
+}
+
+.canvas-container #gameCanvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
 }

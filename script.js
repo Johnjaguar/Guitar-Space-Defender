@@ -14,7 +14,9 @@ document.addEventListener("DOMContentLoaded", () => {
         tuningSelect: document.getElementById('tuningSelect'),
         scoreDisplay: document.getElementById('scoreDisplay'),
         livesDisplay: document.getElementById('livesDisplay'),
-        gameCanvas: document.getElementById('gameCanvas')
+        gameCanvas: document.getElementById('gameCanvas'),
+        gameControls: document.querySelector('.game-controls'),
+        canvasContainer: document.querySelector('.canvas-container')
     };
 
     // Game state
@@ -113,13 +115,74 @@ document.addEventListener("DOMContentLoaded", () => {
     const canvas = elements.gameCanvas;
     const ctx = canvas.getContext('2d');
 
-    // Set canvas size
-    function resizeCanvas() {
-        canvas.width = window.innerWidth * 0.8;
-        canvas.height = window.innerHeight * 0.6;
+    // Fix layout issues
+    function fixLayoutIssues() {
+        // Add sticky class to controls when scrolling
+        const observer = new IntersectionObserver(
+            ([e]) => {
+                if (elements.gameControls) {
+                    elements.gameControls.classList.toggle('sticky', e.intersectionRatio < 1);
+                }
+            },
+            { threshold: [1] }
+        );
+
+        if (elements.gameControls) {
+            observer.observe(elements.gameControls);
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+            requestAnimationFrame(() => {
+                // Reposition game elements after resize
+                if (gameState.rocketY > canvas.height) {
+                    gameState.rocketY = canvas.height / 2;
+                }
+                // Redraw game if running
+                if (gameState.isRunning) {
+                    drawGame();
+                }
+            });
+        });
+
+        // Initial canvas resize
+        resizeCanvas();
     }
-    resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
+
+    // Make sure canvas resizing works properly
+    function resizeCanvas() {
+        const container = elements.canvasContainer;
+        if (!container || !canvas) return;
+
+        // Get container dimensions
+        const containerWidth = container.clientWidth;
+        const containerHeight = container.clientHeight;
+
+        // Set canvas size based on container while maintaining 5:3 aspect ratio
+        canvas.width = containerWidth;
+        canvas.height = containerWidth * 0.6; // 5:3 aspect ratio
+
+        // Update canvas style
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+        canvas.style.objectFit = 'contain';
+
+        // Update game state positions if needed
+        if (gameState.rocketY > canvas.height) {
+            gameState.rocketY = canvas.height / 2;
+        }
+
+        // Adjust meteor positions
+        gameState.meteors.forEach(meteor => {
+            if (meteor.y > canvas.height) {
+                meteor.y = canvas.height - meteor.size;
+            }
+        });
+    }
+
+    // Call fixLayoutIssues during initialization
+    fixLayoutIssues();
 
     // Initialize stars
     function initStars() {
@@ -1456,6 +1519,17 @@ document.addEventListener("DOMContentLoaded", () => {
             audioContext.resume();
         }
         
+        // Ensure tutorial is visible
+        setTimeout(() => {
+            if (tutorialElement) {
+                tutorialElement.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center',
+                    inline: 'center'
+                });
+            }
+        }, 100);
+        
         // Log current detection status
         console.log("Current detection state:", {
             activeTutorial: tutorial.id,
@@ -1710,6 +1784,15 @@ document.addEventListener("DOMContentLoaded", () => {
         oscillator.stop(audioContext.currentTime + 0.3);
     }
 
+    // Function to update game visibility state
+    function updateGameVisibility() {
+        if (gameState.isRunning) {
+            document.body.classList.add('game-running');
+        } else {
+            document.body.classList.remove('game-running');
+        }
+    }
+
     // Start the game
     function startGame() {
         // Initialize game state
@@ -1722,6 +1805,10 @@ document.addEventListener("DOMContentLoaded", () => {
         gameState.meteorInterval = 3000;
         gameState.meteorSpeed = 2;
         gameState.laserBeams = [];
+        
+        // Set initial rocket position
+        const canvas = elements.gameCanvas;
+        gameState.rocketPosition = canvas.width * 0.1; // 10% from left
         gameState.rocketY = canvas.height / 2;
         
         // Initialize shield bubbles
@@ -1729,8 +1816,8 @@ document.addEventListener("DOMContentLoaded", () => {
         for (let i = 0; i < gameState.maxShields; i++) {
             gameState.shields.push({
                 active: true,
-                x: gameState.rocketPosition + 30, // Position relative to rocket
-                y: gameState.rocketY - 40 + (i * 40), // Vertical spacing
+                x: gameState.rocketPosition + 30,
+                y: gameState.rocketY - 40 + (i * 40),
                 radius: 30,
                 opacity: 0.6
             });
@@ -1755,11 +1842,29 @@ document.addEventListener("DOMContentLoaded", () => {
         
         // Play start sound
         playStartSound();
+        
+        // Force the layout to center properly and scroll to it
+        setTimeout(() => {
+            if (elements.canvasContainer) {
+                // Ensure canvas is properly sized
+                resizeCanvas();
+                
+                // Scroll to the canvas with smooth animation
+                elements.canvasContainer.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center',
+                    inline: 'center'
+                });
+            }
+        }, 500);
     }
 
     // Stop the game with better audio handling
     function stopGame(message = "MISSION ABORTED") {
         gameState.isRunning = false;
+        
+        // Update game visibility
+        updateGameVisibility();
         
         // Always ensure audio remains connected and active
         if (audioContext && audioContext.state === 'suspended') {
