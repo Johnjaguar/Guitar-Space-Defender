@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Guitar Space Defender - Learn Guitar String Names">
+    <title>Guitar Space Defender</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Background Effects -->
+    <div class="stars"></div>
+
+    <!-- Game Container -->
+    <div class="game-container">
+        <!-- Game Header -->
+        <div class="game-header">
+            <h1 class="game-title">GUITAR SPACE DEFENDER</h1>
+            <p class="game-subtitle">Play the correct string to destroy incoming meteors!</p>
+        </div>
+
+        <!-- Controls and Status -->
+        <div class="game-controls">
+            <!-- Control Panel -->
+            <div class="control-panel">
+                <h2 class="panel-title">
+                    <i data-lucide="gamepad-2"></i>
+                    MISSION CONTROLS
+                </h2>
+                
+                <!-- Tuning Selector -->
+                <div class="tuning-selector">
+                    <select id="tuningSelect" class="tuning-dropdown">
+                        <option value="standard">Standard E (EADGBE)</option>
+                        <option value="half-step">Half Step Down</option>
+                        <option value="dropD">Drop D (DADGBE)</option>
+                    </select>
+                </div>
+
+                <!-- Start Button -->
+                <button id="startButton">START MISSION</button>
+            </div>
+
+            <!-- Status Panel -->
+            <div class="status-panel">
+                <h2 class="panel-title">
+                    <i data-lucide="activity"></i>
+                    MISSION STATUS
+                </h2>
+
+                <!-- Status Bar -->
+                <div class="status-bar">
+                    <div class="status-indicator">
+                        <div class="status-light"></div>
+                        <span id="missionStatus">MISSION STANDBY</span>
+                    </div>
+                    <div class="mission-time">
+                        T+ <span id="mission-timer">00:00</span>
+                    </div>
+                </div>
+
+                <!-- Telemetry Grid -->
+                <div class="telemetry-grid">
+                    <div class="telemetry-box">
+                        <div class="telemetry-label">STRING DETECTED</div>
+                        <div id="currentNote" class="telemetry-value">-</div>
+                    </div>
+                    <div class="telemetry-box">
+                        <div class="telemetry-label">FREQUENCY</div>
+                        <div id="frequency" class="telemetry-value">-</div>
+                    </div>
+                    <div class="telemetry-box">
+                        <div class="telemetry-label">SCORE</div>
+                        <div id="scoreDisplay" class="telemetry-value">0</div>
+                    </div>
+                    <div class="telemetry-box">
+                        <div class="telemetry-label">SHIELDS</div>
+                        <div id="livesDisplay" class="telemetry-value">3</div>
+                    </div>
+                </div>
+
+                <!-- Signal Monitor -->
+                <div class="signal-monitor">
+                    <i data-lucide="activity"></i>
+                    <div class="signal-bar">
+                        <div id="volumeLevel" class="signal-level"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Canvas -->
+        <canvas id="gameCanvas" width="800" height="500"></canvas>
+
+        <!-- Mission Feedback -->
+        <div id="status">AWAITING MISSION START</div>
+
+        <!-- Instructions -->
+        <div class="instructions">
+            <h2>
+                <i data-lucide="info"></i>
+                HOW TO PLAY
+            </h2>
+            <p>Defend your space guitar against incoming meteors by playing the correct guitar string that matches the string name on each meteor!</p>
+            <ul>
+                <li>Play the string shown on each meteor to fire a laser and destroy it</li>
+                <li>Each destroyed meteor earns points</li>
+                <li>If a meteor hits your ship, you lose a shield</li>
+                <li>The game gets faster and more challenging as you progress</li>
+                <li>Make sure your guitar is connected and your microphone is allowed</li>
+            </ul>
+            <p>This game helps you learn and memorize guitar string names while having fun!</p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
