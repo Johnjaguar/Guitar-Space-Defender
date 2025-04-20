@@ -315,7 +315,7 @@ body {
     margin-bottom: 0.25rem;
 }
 
-/* Tutorial Popup */
+/* Tutorial Popup - Updated for string-based interactions */
 .tutorial-popup {
     position: absolute;
     top: 50%;
@@ -343,14 +343,25 @@ body {
     line-height: 1.5;
 }
 
-.tutorial-close {
-    padding: 8px 16px;
-    background: var(--primary);
-    border: none;
+.string-instruction {
+    color: var(--warning);
+    font-weight: bold;
+    margin-bottom: 10px;
+    padding: 10px;
+    border: 1px dashed var(--warning);
     border-radius: 5px;
-    color: white;
-    font-family: 'Orbitron', sans-serif;
-    cursor: pointer;
+    animation: pulse 2s infinite;
+}
+
+.string-detection-indicator {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-top: 10px;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
 }
 
 /* Responsive Adjustments */
