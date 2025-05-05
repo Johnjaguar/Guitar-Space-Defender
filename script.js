@@ -410,7 +410,7 @@ document.addEventListener("DOMContentLoaded", () => {
         ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
         ctx.shadowBlur = 10;
         ctx.fillStyle = 'white';
-        ctx.font = `bold ${Math.max(16, meteor.size / 2)}px Orbitron, sans-serif`;
+        ctx.font = `bold ${Math.max(16, meteor.size / 2)}px 'Share Tech Mono', monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(meteor.displayName, 0, 0);
@@ -814,8 +814,8 @@ document.addEventListener("DOMContentLoaded", () => {
         gameState.shields.forEach((shield, index) => {
             if (shield.active) {
                 shield.x = gameState.rocketPosition + 30;
-                shield.y = gameState.rocketY - 40 + (index * 40);
-                shield.opacity = 0.4 + Math.sin(Date.now() / 500) * 0.2;
+                shield.y = gameState.rocketY;
+                shield.opacity = 0.6 - (index * 0.1) + Math.sin(Date.now() / 500) * 0.1;
             }
         });
         
@@ -855,18 +855,65 @@ document.addEventListener("DOMContentLoaded", () => {
                         gameState.shields[activeShieldIndex].y
                     );
                     
-                    // Mark meteor as destroyed
-                    meteor.destroyed = true;
-                    
                     // Update lives count
                     gameState.lives--;
                     elements.livesDisplay.textContent = gameState.lives;
                     elements.status.textContent = `SHIELD DESTROYED! ${gameState.lives} REMAINING`;
                     
-                    // Game over check
-                    if (gameState.lives <= 0) {
+                    // Mark meteor as destroyed to prevent multiple hits
+                    meteor.destroyed = true;
+                    
+                    // Create explosion effect
+                    createExplosion(meteor.x, meteor.y, meteor.size);
+                    
+                    // Fix: Only end game if all shields are destroyed AND lives are 0
+                    if (gameState.lives <= 0 && gameState.shields.every(s => !s.active)) {
                         createExplosion(gameState.rocketPosition, gameState.rocketY, 50);
                         stopGame("GAME OVER - OUT OF SHIELDS");
+                    }
+                } else {
+                    // All shields are gone, but player gets one final life
+                    if (gameState.lives > 0) {
+                        gameState.lives--;
+                        elements.livesDisplay.textContent = gameState.lives;
+                        elements.status.textContent = `DIRECT HIT! FINAL LIFE REMAINING!`;
+                        
+                        // Mark meteor as destroyed
+                        meteor.destroyed = true;
+                        
+                        // Create explosion effect
+                        createExplosion(meteor.x, meteor.y, meteor.size);
+                        
+                        // Visual feedback for last life
+                        const flashOverlay = document.createElement('div');
+                        flashOverlay.style.position = 'absolute';
+                        flashOverlay.style.top = '0';
+                        flashOverlay.style.left = '0';
+                        flashOverlay.style.width = '100%';
+                        flashOverlay.style.height = '100%';
+                        flashOverlay.style.backgroundColor = 'rgba(239, 68, 68, 0.3)';
+                        flashOverlay.style.pointerEvents = 'none';
+                        flashOverlay.style.zIndex = '5';
+                        flashOverlay.style.animation = 'flash-danger 0.5s forwards';
+                        document.body.appendChild(flashOverlay);
+                        
+                        // Remove flash after animation
+                        setTimeout(() => {
+                            if (flashOverlay.parentNode) {
+                                flashOverlay.parentNode.removeChild(flashOverlay);
+                            }
+                        }, 500);
+                        
+                        // Only end game if on final life
+                        if (gameState.lives <= 0) {
+                            createExplosion(gameState.rocketPosition, gameState.rocketY, 50);
+                            stopGame("GAME OVER - ROCKET DESTROYED");
+                        }
+                    } else {
+                        // Game over when final life is lost
+                        meteor.destroyed = true;
+                        createExplosion(gameState.rocketPosition, gameState.rocketY, 50);
+                        stopGame("GAME OVER - ROCKET DESTROYED");
                     }
                 }
             }
@@ -924,14 +971,23 @@ document.addEventListener("DOMContentLoaded", () => {
             if (shield.active) {
                 ctx.save();
                 
-                // Create gradient for shield
+                // Create gradient for shield with color based on tier
+                let shieldColor;
+                if (shield.tier === 1) {
+                    shieldColor = 'rgba(96, 165, 250, '; // Blue for outermost
+                } else if (shield.tier === 2) {
+                    shieldColor = 'rgba(129, 140, 248, '; // Purple for middle
+                } else {
+                    shieldColor = 'rgba(168, 85, 247, '; // Pink/violet for innermost
+                }
+                
                 const gradient = ctx.createRadialGradient(
                     shield.x, shield.y, shield.radius * 0.5,
                     shield.x, shield.y, shield.radius
                 );
-                gradient.addColorStop(0, `rgba(96, 165, 250, ${shield.opacity * 0.7})`);
-                gradient.addColorStop(0.8, `rgba(96, 165, 250, ${shield.opacity * 0.3})`);
-                gradient.addColorStop(1, 'rgba(96, 165, 250, 0)');
+                gradient.addColorStop(0, `${shieldColor}${shield.opacity * 0.7})`);
+                gradient.addColorStop(0.8, `${shieldColor}${shield.opacity * 0.3})`);
+                gradient.addColorStop(1, `${shieldColor}0)`);
                 
                 // Draw bubble
                 ctx.fillStyle = gradient;
@@ -1882,15 +1938,18 @@ document.addEventListener("DOMContentLoaded", () => {
         gameState.rocketPosition = canvas.width * 0.1; // 10% from left
         gameState.rocketY = canvas.height / 2;
         
-        // Initialize shield bubbles
+        // Initialize shield bubbles with tiered system
         gameState.shields = [];
         for (let i = 0; i < gameState.maxShields; i++) {
+            // Calculate decreasing shield sizes
+            const scaleFactor = 1 - (i * 0.2); // First shield largest, third smallest
             gameState.shields.push({
                 active: true,
-                x: gameState.rocketPosition + 30,
-                y: gameState.rocketY - 40 + (i * 40),
-                radius: 30,
-                opacity: 0.6
+                x: gameState.rocketPosition + 30, // All shields centered at same x position
+                y: gameState.rocketY, // All shields centered at same y position
+                radius: 45 * scaleFactor, // Larger base size with scaling
+                opacity: 0.6 - (i * 0.1), // Slightly different opacity for visual layering
+                tier: i + 1 // Track shield tier but don't display number
             });
         }
         
