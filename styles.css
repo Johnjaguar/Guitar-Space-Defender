@@ -427,3 +427,21 @@ html {
     height: 100%;
     object-fit: contain;
 }
+
+/* Game Over State */
+#status.game-over {
+    animation: pulse 2s infinite;
+    border: 2px solid var(--warning);
+    background: rgba(251, 191, 36, 0.2);
+    padding: 15px;
+    margin-top: 20px;
+    font-size: 1.2em;
+    text-align: center;
+    font-weight: bold;
+    color: var(--warning);
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; border-color: var(--warning); }
+    50% { opacity: 0.8; border-color: var(--danger); }
+}

@@ -38,7 +38,10 @@ document.addEventListener("DOMContentLoaded", () => {
         laserBeams: [],
         shields: [], // Array to hold shield objects
         maxShields: 3, // Maximum number of shields
-        shieldParticles: [] // Array for shield break particles
+        shieldParticles: [], // Array for shield break particles
+        gameOverMode: false,
+        canRestartWithG: false,
+        restartTimerId: null
     };
 
     // Tunings definition
@@ -353,6 +356,8 @@ document.addEventListener("DOMContentLoaded", () => {
     function drawMeteor(meteor) {
         ctx.save();
         ctx.translate(meteor.x, meteor.y);
+        
+        // Rotate only the meteor body, not the text
         ctx.rotate(meteor.rotation);
         
         // Draw meteor body with glow effect
@@ -390,13 +395,18 @@ document.addEventListener("DOMContentLoaded", () => {
             ctx.fill();
         });
         
-        // Create a background for the text
+        // IMPORTANT: Reset rotation before drawing text
+        ctx.restore();
+        ctx.save();
+        ctx.translate(meteor.x, meteor.y);
+        
+        // Create a background for the text that doesn't rotate
         ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
         ctx.beginPath();
         ctx.arc(0, 0, meteor.size * 0.6, 0, Math.PI * 2);
         ctx.fill();
         
-        // Draw string name with glow effect
+        // Draw string name with glow effect - NO ROTATION
         ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
         ctx.shadowBlur = 10;
         ctx.fillStyle = 'white';
@@ -967,6 +977,36 @@ document.addEventListener("DOMContentLoaded", () => {
         
         // Draw string helper
         drawStringHelper();
+
+        // Draw score display on canvas
+        ctx.save();
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
+        ctx.fillRect(10, 10, 150, 40);
+        ctx.strokeStyle = 'rgba(96, 165, 250, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(10, 10, 150, 40);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 18px Orbitron, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`SCORE: ${gameState.score}`, 20, 30);
+        ctx.restore();
+
+        // Draw lives indicator
+        ctx.save();
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
+        ctx.fillRect(canvas.width - 160, 10, 150, 40);
+        ctx.strokeStyle = 'rgba(96, 165, 250, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(canvas.width - 160, 10, 150, 40);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 18px Orbitron, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`SHIELDS: ${gameState.lives}`, canvas.width - 150, 30);
+        ctx.restore();
     }
     
     // Draw a string helper at the bottom of the screen
@@ -1423,6 +1463,15 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // Add keyboard controls for testing (for developers)
     document.addEventListener('keydown', (event) => {
+        // For testing restart with key 'r'
+        if (event.key === 'r' && gameState.gameOverMode && gameState.canRestartWithG) {
+            console.log("Manual restart triggered with 'r' key");
+            gameState.gameOverMode = false;
+            resetGame();
+            startGame();
+            return;
+        }
+        
         if (!gameState.isRunning) return;
         
         // Map keys to string frequencies
@@ -1475,14 +1524,6 @@ document.addEventListener("DOMContentLoaded", () => {
             content: 'Your training is complete! Ready to defend the galaxy with your guitar?',
             requiredString: 'E2', // Low E string
             stringDisplayText: 'PLUCK LOW E STRING (THICKEST) TO START MISSION',
-            nextTutorial: null
-        },
-        {
-            id: 'game-over',
-            title: 'MISSION FAILED',
-            content: 'Your ship was destroyed! Try again to improve your guitar string recognition.',
-            requiredString: 'G3', // G string
-            stringDisplayText: 'PLUCK G STRING TO PLAY AGAIN',
             nextTutorial: null
         }
     ];
@@ -1564,41 +1605,68 @@ document.addEventListener("DOMContentLoaded", () => {
                     document.body.removeChild(tutorialElement);
                 }
                 
-                // Reset active tutorial
+                // Reset active tutorial BEFORE proceeding to avoid race conditions
                 activeTutorial = null;
                 
-                // Special case handling based on tutorial type
-                if (tutorial.id === 'game-over') {
-                    console.log("Game over tutorial completed - restarting game");
-                    resetGame();
-                    startGame();
-                } else if (tutorial.nextTutorial) {
-                    console.log(`Tutorial ${tutorial.id} completed - showing next tutorial: ${tutorial.nextTutorial}`);
-                    setTimeout(() => {
+                // Use setTimeout to ensure clean state transition
+                setTimeout(() => {
+                    // Handle tutorial progression based on ID
+                    if (tutorial.nextTutorial) {
+                        console.log(`Tutorial ${tutorial.id} completed - showing next tutorial: ${tutorial.nextTutorial}`);
                         const nextTutorial = tutorials.find(t => t.id === tutorial.nextTutorial);
                         if (nextTutorial) {
                             showTutorial(nextTutorial);
+                        } else {
+                            console.error(`Next tutorial ${tutorial.nextTutorial} not found!`);
+                            // Fallback to start game if tutorial sequence breaks
+                            startGame();
                         }
-                    }, 500);
-                } else if (tutorial.id === 'final') {
-                    console.log("Final tutorial completed - starting game");
-                    setTimeout(() => {
+                    } else if (tutorial.id === 'final') {
+                        console.log("Final tutorial completed - starting game");
                         startGame();
-                    }, 500);
-                }
+                    }
+                }, 300); // Short delay to ensure clean transition
             }
         }, 100);
         
-        // Add safety timeout to prevent tutorial from getting stuck
+        // Add a safety timeout to prevent tutorial from getting stuck
         setTimeout(() => {
             if (activeTutorial === tutorial) {
                 console.log("Tutorial may be stuck - checking audio system");
+                
+                // Check if audio system is working
                 if (!source || !analyser) {
                     console.log("Audio system disconnected - attempting to reconnect");
                     initAudioContext();
                 }
+                
+                // Add emergency escape option if tutorial seems stuck
+                if (!tutorialElement.querySelector('.emergency-button')) {
+                    const emergencyButton = document.createElement('button');
+                    emergencyButton.className = 'emergency-button';
+                    emergencyButton.textContent = 'SKIP TUTORIAL';
+                    emergencyButton.style.marginTop = '15px';
+                    emergencyButton.style.padding = '5px 10px';
+                    emergencyButton.style.backgroundColor = 'var(--warning)';
+                    emergencyButton.style.border = 'none';
+                    emergencyButton.style.borderRadius = '5px';
+                    emergencyButton.style.cursor = 'pointer';
+                    
+                    emergencyButton.onclick = () => {
+                        console.log("Emergency escape - skipping tutorial");
+                        clearInterval(stringDetector);
+                        if (tutorialElement.parentNode) {
+                            document.body.removeChild(tutorialElement);
+                        }
+                        activeTutorial = null;
+                        startGame();
+                    };
+                    
+                    tutorialElement.appendChild(emergencyButton);
+                    console.log("Emergency escape button added");
+                }
             }
-        }, 5000);
+        }, 10000); // Add escape option after 10 seconds
     }
     
     // Add a function to handle game reset and restart
@@ -1610,6 +1678,9 @@ document.addEventListener("DOMContentLoaded", () => {
         gameState.laserBeams = [];
         elements.scoreDisplay.textContent = "0";
         elements.livesDisplay.textContent = "3";
+        gameState.gameOverMode = false;
+        gameState.canRestartWithG = false;
+        clearTimeout(gameState.restartTimerId);
     }
 
     // Wait for the low E string to be plucked to start the game
@@ -1861,6 +1932,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Stop the game with better audio handling
     function stopGame(message = "MISSION ABORTED") {
+        console.log("Stopping game with message:", message);
         gameState.isRunning = false;
         
         // Update game visibility
@@ -1877,20 +1949,47 @@ document.addEventListener("DOMContentLoaded", () => {
         elements.missionStatus.textContent = "MISSION STANDBY";
         elements.status.textContent = message;
         
-        // For game over, show tutorial with delay to ensure audio is ready
+        // For game over specifically
         if (message.includes("GAME OVER")) {
-            // Reset note detection to prevent false triggers
-            gameState.lastNote = null;
-            gameState.lastNoteTime = 0;
+            console.log("Game over detected, setting up restart with G string");
             
-            // Show game over tutorial with a slight delay
-            setTimeout(() => {
-                const gameOverTutorial = tutorials.find(t => t.id === 'game-over');
-                if (gameOverTutorial) {
-                    console.log("Showing game over tutorial");
-                    showTutorial(gameOverTutorial);
-                }
-            }, 1500);
+            // Set game over mode
+            gameState.gameOverMode = true;
+            gameState.canRestartWithG = false;
+            
+            // Clear any previous restart timer
+            if (gameState.restartTimerId) {
+                clearTimeout(gameState.restartTimerId);
+            }
+            
+            // After a delay, enable restart with G
+            gameState.restartTimerId = setTimeout(() => {
+                console.log("Now allowing restart with G string");
+                gameState.canRestartWithG = true;
+                
+                // Update status to make it clear
+                elements.status.textContent = "GAME OVER - PLUCK G STRING TO RESTART";
+                elements.status.style.color = "var(--warning)";
+                elements.status.style.fontWeight = "bold";
+                
+                // Make sure status is visible
+                elements.status.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center'
+                });
+                
+                // Keep rendering the game scene
+                continueRenderingAfterGameOver();
+            }, 2000);
+        }
+    }
+
+    // Add this new function to keep rendering after game over
+    function continueRenderingAfterGameOver() {
+        if (!gameState.isRunning && gameState.gameOverMode) {
+            // Keep rendering the game scene
+            drawGame();
+            requestAnimationFrame(continueRenderingAfterGameOver);
         }
     }
 
@@ -1900,7 +1999,7 @@ document.addEventListener("DOMContentLoaded", () => {
         
         // Only check for game over condition
         if (elements.status.textContent.includes("GAME OVER") && !activeTutorial) {
-            const gameOverTutorial = tutorials.find(t => t.id === 'game-over');
+            const gameOverTutorial = tutorials.find(t => t.id === 'final');
             if (gameOverTutorial) {
                 showTutorial(gameOverTutorial);
             }
@@ -1911,4 +2010,133 @@ document.addEventListener("DOMContentLoaded", () => {
             requestAnimationFrame(checkTutorials);
         }
     }
+
+    // This function will continuously check for G string to restart
+    function setupGameOverGStringDetection() {
+        // Make sure we're continuously checking for string detection
+        function checkForRestart() {
+            // Check if we're in game over mode and allowed to restart
+            if (gameState.gameOverMode && gameState.canRestartWithG) {
+                // If G string was detected recently
+                if (gameState.lastNote === 'G3') {
+                    const now = Date.now();
+                    // Only proceed if this was a recent detection
+                    if (now - gameState.lastNoteTime < 1000) {
+                        console.log("G string detected - restarting game!");
+                        
+                        // Reset game over state
+                        gameState.gameOverMode = false;
+                        gameState.canRestartWithG = false;
+                        
+                        // Clear any pending timers
+                        if (gameState.restartTimerId) {
+                            clearTimeout(gameState.restartTimerId);
+                            gameState.restartTimerId = null;
+                        }
+                        
+                        // Reset and start game
+                        resetGame();
+                        startGame();
+                        
+                        // Exit this check - no need to continue
+                        return;
+                    }
+                }
+            }
+            
+            // Continue checking
+            requestAnimationFrame(checkForRestart);
+        }
+        
+        // Start the check loop
+        checkForRestart();
+    }
+
+    // Call this function at the end of initialization
+    setupGameOverGStringDetection();
+
+    // Add keyboard shortcut to skip tutorials
+    window.addEventListener('keydown', (e) => {
+        // Pressing Escape key will skip all tutorials and start the game
+        if (e.key === 'Escape' && activeTutorial) {
+            console.log("Emergency escape triggered with Escape key");
+            const tutorialElement = document.querySelector('.tutorial-popup');
+            if (tutorialElement && tutorialElement.parentNode) {
+                tutorialElement.parentNode.removeChild(tutorialElement);
+            }
+            activeTutorial = null;
+            startGame();
+        }
+    });
+
+    // Add automatic diagnostics when game freezes
+    let lastActivityTime = Date.now();
+    let activityCheckInterval = setInterval(() => {
+        // If no activity for 10 seconds, print debug info
+        if (Date.now() - lastActivityTime > 10000) {
+            console.warn("Possible game freeze detected. Current state:");
+            logGameState();
+            
+            // Add a message to the UI
+            if (elements.status) {
+                elements.status.textContent = "POSSIBLE FREEZE DETECTED - CHECK CONSOLE (F12)";
+                elements.status.style.color = "var(--danger)";
+            }
+        }
+        
+        // Update activity time if game is running or tutorial active
+        if (gameState.isRunning || activeTutorial) {
+            lastActivityTime = Date.now();
+        }
+    }, 5000);
+
+    // Function to log the current game state
+    function logGameState() {
+        console.log("Current Game State:", {
+            isRunning: gameState.isRunning,
+            score: gameState.score,
+            lives: gameState.lives,
+            level: gameState.level,
+            meteors: gameState.meteors.length,
+            lastNote: gameState.lastNote,
+            lastNoteTime: gameState.lastNoteTime,
+            activeTutorial: activeTutorial ? activeTutorial.id : null,
+            audioContextState: audioContext ? audioContext.state : 'none',
+            analyserConnected: !!analyser,
+            sourceConnected: !!source
+        });
+    }
+
+    // Function to force start the game (bypassing tutorials)
+    function forceStartGame() {
+        console.log("Force starting game...");
+        
+        // Clear any tutorials
+        if (activeTutorial) {
+            const tutorialElement = document.querySelector('.tutorial-popup');
+            if (tutorialElement && tutorialElement.parentNode) {
+                tutorialElement.parentNode.removeChild(tutorialElement);
+            }
+            activeTutorial = null;
+        }
+        
+        // Make sure audio is initialized
+        if (!audioContext) {
+            initAudioContext();
+        }
+        
+        // Reset button
+        if (elements.button) {
+            elements.button.disabled = false;
+            elements.button.textContent = "ABORT MISSION";
+        }
+        
+        // Start the game directly
+        resetGame();
+        startGame();
+    }
+
+    // Expose function to window for console debugging
+    window.forceStartGame = forceStartGame;
+    window.logGameState = logGameState;
 });
