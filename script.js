@@ -207,12 +207,67 @@ document.addEventListener("DOMContentLoaded", () => {
         const stringNames = Object.keys(stringFrequencies);
         const randomString = stringNames[Math.floor(Math.random() * stringNames.length)];
         
-        // Create meteor with string name
+        // Define base size and assign sizes based on string thickness
+        // High E (thinnest) = smallest, Low E (thickest) = largest
+        let baseSize;
+        
+        // Set the size based on string name - correlates with actual string thickness
+        switch(randomString) {
+            case 'E4': // High E (thinnest)
+                baseSize = 20;
+                break;
+            case 'B3': // B string
+                baseSize = 25;
+                break;
+            case 'G3': // G string
+                baseSize = 30;
+                break;
+            case 'D3': // D string
+                baseSize = 35;
+                break;
+            case 'A2': // A string
+                baseSize = 40;
+                break;
+            case 'E2': // Low E (thickest)
+                baseSize = 45;
+                break;
+            // For drop-D and other tunings, fallback sizes
+            case 'Eb4':
+                baseSize = 20;
+                break;
+            case 'Bb3':
+                baseSize = 25;
+                break;
+            case 'Gb3':
+                baseSize = 30;
+                break;
+            case 'Db3':
+                baseSize = 35;
+                break;
+            case 'Ab2':
+                baseSize = 40;
+                break;
+            case 'Eb2':
+                baseSize = 45;
+                break;
+            case 'D2': // Drop D lowest string
+                baseSize = 45;
+                break;
+            default:
+                // Default size with small variation for any unlisted strings
+                baseSize = 30;
+        }
+        
+        // Add small random variation (±15%) to prevent exact uniformity
+        const sizeVariation = baseSize * 0.15;
+        const finalSize = baseSize + (Math.random() * sizeVariation * 2 - sizeVariation);
+        
+        // Create meteor with string name and appropriate size
         const meteor = {
             id: Date.now() + Math.random().toString(36).substr(2, 9), // Add unique ID
             x: canvas.width + 50, // Start off-screen to the right
             y: 50 + Math.random() * (canvas.height - 100),
-            size: 30 + Math.random() * 30,
+            size: finalSize, // Use the string-appropriate size
             speed: gameState.meteorSpeed + Math.random() * gameState.level,
             string: randomString,
             displayName: stringDisplayNames[randomString] || randomString,
