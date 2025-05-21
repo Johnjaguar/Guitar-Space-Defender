@@ -25,20 +25,29 @@ document.addEventListener("DOMContentLoaded", () => {
         score: 0,
         lives: 3,
         level: 1,
+        currentLevel: 1, // New: Current level in progression system
+        levelGoal: 5000, // New: Points needed for current level
+        availableStrings: [], // New: Strings available in current level
+        gameCompleted: false, // New: Track if game is completed
+        moonLanding: { // New: Moon landing animation state
+            active: false,
+            progress: 0,
+            stars: []
+        },
         meteors: [],
         lastMeteorTime: 0,
-        meteorInterval: 3000, // Time between meteors in ms
+        meteorInterval: 3000,
         currentNote: null,
         lastNote: null,
-        lastNoteTime: 0, // Add this property to track when we last fired
-        rocketPosition: 100, // Position from left
-        rocketY: 0, // New property for vertical position
+        lastNoteTime: 0,
+        rocketPosition: 100,
+        rocketY: 0,
         backgroundStars: [],
         meteorSpeed: 2,
         laserBeams: [],
-        shields: [], // Array to hold shield objects
-        maxShields: 3, // Maximum number of shields
-        shieldParticles: [], // Array for shield break particles
+        shields: [],
+        maxShields: 3,
+        shieldParticles: [],
         gameOverMode: false,
         canRestartWithG: false,
         restartTimerId: null
@@ -108,7 +117,11 @@ document.addEventListener("DOMContentLoaded", () => {
         MAX_FREQUENCY: 2500,
         SMOOTHING_WINDOW_SIZE: 5,
         MIN_AMPLITUDE: 0.003,
-        FREQUENCY_TOLERANCE: 7 // cents
+        FREQUENCY_TOLERANCE: 7, // cents
+        // Add new volume threshold constants
+        PLUCK_VOLUME_THRESHOLD: 0.05,    // Minimum volume to count as a new pluck
+        RESIDUAL_VOLUME_THRESHOLD: 0.03, // Maximum volume to consider as residual ringing
+        PLUCK_COOLDOWN: 1000             // Minimum time between plucks in ms
     };
 
     // Smoothing window for frequency detection
@@ -203,9 +216,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Create a meteor with string name
     function createMeteor() {
-        // Get list of string names
-        const stringNames = Object.keys(stringFrequencies);
-        const randomString = stringNames[Math.floor(Math.random() * stringNames.length)];
+        // Get list of available strings for the current level
+        const availableStrings = gameState.availableStrings;
+        if (!availableStrings || availableStrings.length === 0) return;
+        
+        const randomString = availableStrings[Math.floor(Math.random() * availableStrings.length)];
         
         // Define base size and assign sizes based on string thickness
         // High E (thinnest) = smallest, Low E (thickest) = largest
@@ -264,15 +279,15 @@ document.addEventListener("DOMContentLoaded", () => {
         
         // Create meteor with string name and appropriate size
         const meteor = {
-            id: Date.now() + Math.random().toString(36).substr(2, 9), // Add unique ID
-            x: canvas.width + 50, // Start off-screen to the right
+            id: Date.now() + Math.random().toString(36).substr(2, 9),
+            x: canvas.width + 50,
             y: 50 + Math.random() * (canvas.height - 100),
-            size: finalSize, // Use the string-appropriate size
+            size: finalSize,
             speed: gameState.meteorSpeed + Math.random() * gameState.level,
             string: randomString,
             displayName: stringDisplayNames[randomString] || randomString,
             destroyed: false,
-            targeted: false, // Add tracking for whether this meteor is targeted
+            targeted: false,
             rotation: Math.random() * Math.PI
         };
         
@@ -475,15 +490,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Draw a laser beam with improved effects
     function drawLaser(laser) {
+        if (!laser || !laser.active) return;
+        
         ctx.save();
         
-        // Calculate how long the laser has been active (for animation)
+        // Calculate how long the laser has been active
         const now = Date.now();
         const age = now - laser.timestamp;
-        const lifespan = 500; // 0.5 second lifespan
-        const lifeFactor = Math.max(0, 1 - (age / lifespan)); // Ensure positive value
+        const lifespan = 600; // Longer lifespan for better visibility
+        const lifeFactor = Math.max(0, 1 - (age / lifespan));
         
-        // Create a gradient for the laser beam
+        if (lifeFactor <= 0) {
+            laser.active = false;
+            ctx.restore();
+            return;
+        }
+        
+        // Create a brighter gradient for better visibility
         const gradient = ctx.createLinearGradient(
             laser.startX, laser.startY, 
             laser.endX, laser.endY
@@ -493,9 +516,19 @@ document.addEventListener("DOMContentLoaded", () => {
         gradient.addColorStop(0.5, 'rgba(129, 140, 248, 1)');
         gradient.addColorStop(1, 'rgba(96, 165, 250, 0.1)');
         
-        // Draw main beam
+        // Draw main beam with increased width
         ctx.strokeStyle = gradient;
-        ctx.lineWidth = Math.max(1, 3 * lifeFactor); // Ensure positive line width
+        ctx.lineWidth = Math.max(2, 5 * lifeFactor); // Thicker line for visibility
+        ctx.beginPath();
+        ctx.moveTo(laser.startX, laser.startY);
+        ctx.lineTo(laser.endX, laser.endY);
+        ctx.stroke();
+        
+        // Add stronger glow effect
+        ctx.shadowColor = 'rgba(96, 165, 250, 0.8)';
+        ctx.shadowBlur = 20;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.lineWidth = Math.max(1, 6 * lifeFactor);
         ctx.beginPath();
         ctx.moveTo(laser.startX, laser.startY);
         ctx.lineTo(laser.endX, laser.endY);
@@ -507,56 +540,59 @@ document.addEventListener("DOMContentLoaded", () => {
             Math.pow(laser.endY - laser.startY, 2)
         );
         
-        // Only draw pulses if we have a meaningful distance
         if (distance > 10) {
             const pulseCount = Math.min(5, Math.floor(distance / 50));
             const dx = (laser.endX - laser.startX) / pulseCount;
             const dy = (laser.endY - laser.startY) / pulseCount;
             
-            // Ensure pulse size is always positive
-            const pulseSize = Math.max(2, 5 * lifeFactor);
+            const pulseSize = Math.max(3, 7 * lifeFactor); // Larger pulses
             
             for (let i = 0; i < pulseCount; i++) {
                 const pulseX = laser.startX + (i * dx) + ((age / 50) % Math.max(1, dx));
                 const pulseY = laser.startY + (i * dy) + ((age / 50) % Math.max(1, dy));
                 
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                // Bright core of pulse
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
                 ctx.beginPath();
                 ctx.arc(pulseX, pulseY, pulseSize, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Outer glow of pulse
+                ctx.fillStyle = 'rgba(96, 165, 250, 0.7)';
+                ctx.beginPath();
+                ctx.arc(pulseX, pulseY, pulseSize * 1.5, 0, Math.PI * 2);
                 ctx.fill();
             }
         }
         
-        // Draw glow effect
-        ctx.globalAlpha = Math.max(0.1, 0.5 * lifeFactor);
-        ctx.shadowColor = 'rgba(96, 165, 250, 0.8)';
-        ctx.shadowBlur = 15;
-        ctx.strokeStyle = 'rgba(129, 140, 248, 0.5)';
-        ctx.lineWidth = Math.max(1, 8 * lifeFactor);
-        ctx.beginPath();
-        ctx.moveTo(laser.startX, laser.startY);
-        ctx.lineTo(laser.endX, laser.endY);
-        ctx.stroke();
-        
         ctx.restore();
     }
     
-    // Fire a laser at a specific meteor
-    function fireDirectLaser(stringName, targetMeteor) {
-        // Only create a laser if we have a valid meteor target
+    // Modify the fireLaser function to target only one meteor per string pluck
+    function fireLaser(targetString) {
+        // Find the nearest meteor that matches the string and isn't already targeted
+        const targetMeteor = findNearestMeteorForString(targetString);
+        
         if (targetMeteor) {
+            // Create a laser with a timestamp and unique ID
             const laser = {
+                id: Date.now() + Math.random().toString(36).substr(2, 9),
                 startX: gameState.rocketPosition + 40,
                 startY: gameState.rocketY,
                 endX: targetMeteor.x,
                 endY: targetMeteor.y,
-                targetId: targetMeteor.id, // Track which meteor this laser is targeting
-                timestamp: Date.now()
+                targetId: targetMeteor.id,
+                timestamp: Date.now(),
+                stringType: targetString,
+                active: true,
+                hasHit: false // Track if this laser has already hit a target
             };
             
+            // Add the laser to the game state
             gameState.laserBeams.push(laser);
             
-            // Play laser sound
+            // Play laser sound with volume based on pluck intensity
+            const pluckVolume = gameState.lastNoteVolume || 0.5;
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
             oscillator.type = 'sawtooth';
@@ -564,12 +600,120 @@ document.addEventListener("DOMContentLoaded", () => {
             oscillator.connect(gainNode);
             gainNode.connect(audioContext.destination);
             
-            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            // Scale laser sound volume with pluck volume (with limits)
+            const soundVolume = Math.min(0.5, Math.max(0.1, pluckVolume * 2));
+            gainNode.gain.setValueAtTime(soundVolume, audioContext.currentTime);
             gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
             
             oscillator.start();
             oscillator.stop(audioContext.currentTime + 0.2);
+            
+            // Mark this meteor as targeted to prevent other lasers from targeting it
+            targetMeteor.targeted = true;
+            
+            // Force a longer cooldown between string detections to prevent rapid-fire
+            gameState.lastNoteTime = Date.now();
+            gameState.lastNote = targetString;
+            
+            console.log(`Laser fired at meteor ${targetMeteor.id} for string ${targetString} with volume ${pluckVolume.toFixed(3)}`);
+            return true; // Indicate a laser was fired
         }
+        
+        return false; // No laser was fired
+    }
+
+    // Modify checkCollisions to properly handle meteor destruction
+    function checkCollisions() {
+        const now = Date.now();
+        
+        // Process each laser beam
+        for (let i = gameState.laserBeams.length - 1; i >= 0; i--) {
+            const laser = gameState.laserBeams[i];
+            
+            // Skip inactive lasers or lasers that have already hit
+            if (!laser.active || laser.hasHit) {
+                continue;
+            }
+            
+            // Find the target meteor
+            const targetMeteor = gameState.meteors.find(m => 
+                m.id === laser.targetId && 
+                !m.destroyed
+            );
+            
+            if (targetMeteor) {
+                // Check if laser has reached the meteor
+                const distance = Math.sqrt(
+                    Math.pow(targetMeteor.x - laser.endX, 2) + 
+                    Math.pow(targetMeteor.y - laser.endY, 2)
+                );
+                
+                // If the laser is close enough to the meteor
+                if (distance < targetMeteor.size) {
+                    // Mark this meteor as destroyed
+                    targetMeteor.destroyed = true;
+                    
+                    // Mark this laser as having hit its target
+                    laser.hasHit = true;
+                    
+                    // Calculate score based on meteor size
+                    const sizeBonus = Math.max(1, 50 / targetMeteor.size);
+                    const baseScore = 100 * gameState.level;
+                    const totalScore = Math.floor(baseScore * sizeBonus);
+                    
+                    gameState.score += totalScore;
+                    elements.scoreDisplay.textContent = gameState.score;
+                    
+                    // Create score popup at meteor location
+                    createScorePopup(targetMeteor.x, targetMeteor.y, totalScore);
+                    
+                    // Create explosion effect
+                    createExplosion(targetMeteor.x, targetMeteor.y, targetMeteor.size);
+                    
+                    console.log(`Meteor ${targetMeteor.id} destroyed by laser ${laser.id}`);
+                }
+            }
+            
+            // Check if laser has reached the end of its lifespan
+            if (now - laser.timestamp > 600) {
+                laser.active = false;
+            }
+        }
+        
+        // Clean up inactive lasers after processing
+        gameState.laserBeams = gameState.laserBeams.filter(laser => laser.active);
+    }
+
+    // Update findNearestMeteorForString to be more precise
+    function findNearestMeteorForString(targetString) {
+        let nearestMeteor = null;
+        let minDistance = Infinity;
+        
+        // Only consider valid, untargeted meteors of the correct string type
+        const validMeteors = gameState.meteors.filter(meteor => {
+            return !meteor.destroyed && 
+                   !meteor.targeted && 
+                   meteor.string === targetString && 
+                   meteor.x > gameState.rocketPosition; // Only meteors in front of rocket
+        });
+        
+        // Find the nearest eligible meteor
+        validMeteors.forEach(meteor => {
+            const distance = meteor.x - gameState.rocketPosition;
+            if (distance < minDistance) {
+                minDistance = distance;
+                nearestMeteor = meteor;
+            }
+        });
+        
+        // Log debugging info
+        if (nearestMeteor) {
+            console.log(`Found nearest ${targetString} meteor: ${nearestMeteor.id} at distance ${minDistance}`);
+        } else {
+            console.log(`No eligible meteors found for string ${targetString}`);
+        }
+        
+        return nearestMeteor;
     }
 
     // Create explosion effect with animation
@@ -738,46 +882,6 @@ document.addEventListener("DOMContentLoaded", () => {
         noise.stop(audioContext.currentTime + 0.5);
     }
 
-    // Check for collisions between lasers and meteors
-    function checkCollisions() {
-        const now = Date.now();
-        
-        for (let i = 0; i < gameState.laserBeams.length; i++) {
-            const laser = gameState.laserBeams[i];
-            
-            // Find the target meteor by ID
-            const targetMeteor = gameState.meteors.find(m => m.id === laser.targetId && !m.destroyed);
-            
-            if (targetMeteor) {
-                // Check if laser hit the meteor
-                const distance = Math.sqrt(
-                    Math.pow(targetMeteor.x - laser.endX, 2) + 
-                    Math.pow(targetMeteor.y - laser.endY, 2)
-                );
-                
-                // If the laser is close enough to the meteor
-                if (distance < targetMeteor.size) {
-                    // Laser hit the correct meteor
-                    targetMeteor.destroyed = true;
-                    
-                    // Calculate score based on meteor size
-                    const sizeBonus = Math.max(1, 50 / targetMeteor.size);
-                    const baseScore = 100 * gameState.level;
-                    const totalScore = Math.floor(baseScore * sizeBonus);
-                    
-                    gameState.score += totalScore;
-                    elements.scoreDisplay.textContent = gameState.score;
-                    
-                    // Create score popup at meteor location
-                    createScorePopup(targetMeteor.x, targetMeteor.y, totalScore);
-                    
-                    // Create explosion effect
-                    createExplosion(targetMeteor.x, targetMeteor.y, targetMeteor.size);
-                }
-            }
-        }
-    }
-    
     // Create a score popup
     const scorePopups = [];
     
@@ -983,11 +1087,20 @@ document.addEventListener("DOMContentLoaded", () => {
         checkCollisions();
         
         // Level up check
-        if (gameState.score >= gameState.level * 1000) {
-            gameState.level++;
-            elements.status.textContent = `LEVEL UP! NOW AT LEVEL ${gameState.level}`;
-            gameState.meteorSpeed += 0.5;
-            playLevelUpSound();
+        if (gameState.score >= gameState.levelGoal) {
+            if (gameState.currentLevel < 4) {
+                // Advance to next level
+                gameState.currentLevel++;
+                gameState.score = 0; // Reset score for new level
+                setupLevelStrings();
+                elements.status.textContent = `LEVEL UP! NOW AT LEVEL ${gameState.currentLevel}: ${getLevelDescription()}`;
+                playLevelUpSound();
+            } else {
+                // Game completed - start moon landing
+                gameState.gameCompleted = true;
+                initMoonLanding();
+                return; // Stop normal game updates
+            }
         }
     }
 
@@ -1118,6 +1231,9 @@ document.addEventListener("DOMContentLoaded", () => {
         ctx.textBaseline = 'middle';
         ctx.fillText(`SHIELDS: ${gameState.lives}`, canvas.width - 150, 30);
         ctx.restore();
+        
+        // Draw level progress
+        drawLevelProgress();
     }
     
     // Draw a string helper at the bottom of the screen
@@ -1238,6 +1354,8 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // Activate demo mode for testing without microphone
     function activateDemoMode() {
+        console.log("Activating demo mode");
+        
         if (!audioContext) {
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
         }
@@ -1248,28 +1366,56 @@ document.addEventListener("DOMContentLoaded", () => {
         const gainNode = audioContext.createGain();
         gainNode.gain.value = 0.5;
         
-        // Create oscillator for demo notes
+        // Create oscillator for demo notes with simulated volumes
         const oscillator = audioContext.createOscillator();
         oscillator.type = 'sine';
         oscillator.frequency.setValueAtTime(82.41, audioContext.currentTime); // E2
         
         const demoNotes = [
-            { freq: 82.41, duration: 3000 },  // E2
-            { freq: 110.00, duration: 3000 }, // A2
-            { freq: 146.83, duration: 3000 }, // D3
-            { freq: 196.00, duration: 3000 }, // G3
-            { freq: 246.94, duration: 3000 }, // B3
-            { freq: 329.63, duration: 3000 }  // E4
+            { freq: 82.41, duration: 3000, volume: 0.08 },  // E2
+            { freq: 110.00, duration: 3000, volume: 0.07 }, // A2
+            { freq: 146.83, duration: 3000, volume: 0.09 }, // D3
+            { freq: 196.00, duration: 3000, volume: 0.06 }, // G3
+            { freq: 246.94, duration: 3000, volume: 0.07 }, // B3
+            { freq: 329.63, duration: 3000, volume: 0.08 }  // E4
         ];
         
         let noteIndex = 0;
         
-        // Function to cycle through demo notes
+        // Function to cycle through demo notes with simulated volume
         function playNextNote() {
-            if (!gameState.isRunning) return;
+            if (!gameState.isRunning && !activeTutorial) return;
             
             const note = demoNotes[noteIndex];
             oscillator.frequency.setValueAtTime(note.freq, audioContext.currentTime);
+            
+            // Find the note name for this frequency
+            let noteName = null;
+            let closestDistance = Infinity;
+            for (const [name, frequency] of Object.entries(stringFrequencies)) {
+                const distance = Math.abs(frequency - note.freq);
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    noteName = name;
+                }
+            }
+            
+            // Set last note directly for demo mode with simulated volume
+            if (noteName) {
+                gameState.lastNote = noteName;
+                gameState.lastNoteTime = Date.now();
+                gameState.lastNoteVolume = note.volume;
+                console.log(`Demo mode: Playing ${noteName} (${note.freq} Hz) at volume ${note.volume}`);
+                
+                // Update volume indicator
+                updateVolumeIndicator(note.volume);
+                
+                // In demo mode, we'll automatically trigger a laser for each note
+                if (gameState.isRunning) {
+                    fireLaser(noteName);
+                    window.showPluckIndicator?.();
+                }
+            }
             
             noteIndex = (noteIndex + 1) % demoNotes.length;
             setTimeout(playNextNote, note.duration);
@@ -1330,21 +1476,25 @@ document.addEventListener("DOMContentLoaded", () => {
         const buffer = new Float32Array(analyser.fftSize);
         analyser.getFloatTimeDomainData(buffer);
         
+        // Calculate RMS (Root Mean Square) for volume
         const rms = Math.sqrt(buffer.reduce((acc, val) => acc + val * val, 0) / buffer.length);
+        
+        // Update volume indicator visual
         updateVolumeIndicator(rms);
         
-        // Only log if actual volume detected
+        // Only process if actual volume detected
         if (rms > CONSTANTS.MIN_AMPLITUDE) {
             const frequency = findPitch(buffer, audioContext.sampleRate);
             
             if (frequency && !isNaN(frequency) && isFinite(frequency)) {
-                processDetectedFrequency(frequency);
+                // Pass the volume (rms) to processDetectedFrequency
+                processDetectedFrequency(frequency, rms);
             }
         }
     }
 
     // Process the detected frequency
-    function processDetectedFrequency(frequency) {
+    function processDetectedFrequency(frequency, volume) {
         // Find closest note
         let closestNote = '';
         let minCents = Infinity;
@@ -1364,26 +1514,54 @@ document.addEventListener("DOMContentLoaded", () => {
                 elements.currentNote.textContent = closestNote;
             }
             if (elements.frequency) {
-                elements.frequency.textContent = `${frequency.toFixed(1)} Hz`;
+                elements.frequency.textContent = `${frequency.toFixed(1)} Hz (${(volume * 400).toFixed(0)}%)`;
             }
             
-            // Set the current note in game state
+            // Set the current note in game state - always track this
             gameState.currentNote = stringDisplayNames[closestNote] || closestNote;
             
-            // Important: Only check if we haven't detected this note recently (debounce)
+            // Get current time for comparison
             const now = Date.now();
-            if (now - gameState.lastNoteTime > 500) {
-                // Update last note time and note
+            
+            // TUTORIAL MODE vs GAME MODE detection logic
+            if (activeTutorial) {
+                // Tutorial mode - update last note without cooldown
                 gameState.lastNote = closestNote;
                 gameState.lastNoteTime = now;
+                gameState.lastNoteVolume = volume;
+                console.log(`Tutorial mode: String ${closestNote} detected, volume: ${volume.toFixed(3)}`);
+            } else if (gameState.isRunning) {
+                // Game mode - use volume threshold and cooldown
+                const isNewPluck = volume >= CONSTANTS.PLUCK_VOLUME_THRESHOLD;
+                const pastCooldown = now - gameState.lastNoteTime > CONSTANTS.PLUCK_COOLDOWN;
+                const isDifferentString = closestNote !== gameState.lastNote;
                 
-                // Update status to show the detected string
-                elements.status.textContent = `STRING DETECTED: ${stringDisplayNames[closestNote] || closestNote}`;
+                console.log(`String: ${closestNote}, Volume: ${volume.toFixed(3)}, Time since last: ${now - gameState.lastNoteTime}ms, ` +
+                           `Is new pluck: ${isNewPluck}, Past cooldown: ${pastCooldown}, Different string: ${isDifferentString}`);
                 
-                // If game is running, fire laser for the detected string
-                if (gameState.isRunning) {
-                    fireLaser(closestNote);
+                if ((isNewPluck && pastCooldown) || (isNewPluck && isDifferentString)) {
+                    elements.status.textContent = `STRING DETECTED: ${stringDisplayNames[closestNote] || closestNote} (Volume: ${(volume * 400).toFixed(0)}%)`;
+                    
+                    const laserFired = fireLaser(closestNote);
+                    
+                    if (laserFired) {
+                        gameState.lastNote = closestNote;
+                        gameState.lastNoteTime = now;
+                        gameState.lastNoteVolume = volume;
+                        console.log(`New pluck accepted: Laser fired at ${volume.toFixed(3)} volume`);
+                        window.showPluckIndicator?.();
+                    }
+                } else {
+                    console.log(`String detection ignored: ${isNewPluck ? "Volume sufficient" : "Volume too low"}, ` +
+                               `${pastCooldown ? "Past cooldown" : "Within cooldown"}`);
+                    
+                    if (isNewPluck && !pastCooldown) {
+                        elements.status.textContent = `PLUCK DETECTED BUT TOO SOON - WAIT A MOMENT`;
+                    }
                 }
+            } else {
+                // Not in game or tutorial mode - just update display
+                elements.status.textContent = `STRING DETECTED: ${stringDisplayNames[closestNote] || closestNote}`;
             }
         }
     }
@@ -1393,56 +1571,31 @@ document.addEventListener("DOMContentLoaded", () => {
         let nearestMeteor = null;
         let minDistance = Infinity;
         
-        gameState.meteors.forEach(meteor => {
-            if (!meteor.destroyed && !meteor.targeted && meteor.string === targetString) {
-                const distance = meteor.x - gameState.rocketPosition;
-                if (distance > 0 && distance < minDistance) {
-                    minDistance = distance;
-                    nearestMeteor = meteor;
-                }
+        // Only consider valid, untargeted meteors of the correct string type
+        const validMeteors = gameState.meteors.filter(meteor => {
+            return !meteor.destroyed && 
+                   !meteor.targeted && 
+                   meteor.string === targetString && 
+                   meteor.x > gameState.rocketPosition; // Only meteors in front of rocket
+        });
+        
+        // Find the nearest eligible meteor
+        validMeteors.forEach(meteor => {
+            const distance = meteor.x - gameState.rocketPosition;
+            if (distance < minDistance) {
+                minDistance = distance;
+                nearestMeteor = meteor;
             }
         });
         
-        // If we found a meteor, mark it as targeted
+        // Log debugging info
         if (nearestMeteor) {
-            nearestMeteor.targeted = true;
+            console.log(`Found nearest ${targetString} meteor: ${nearestMeteor.id} at distance ${minDistance}`);
+        } else {
+            console.log(`No eligible meteors found for string ${targetString}`);
         }
         
         return nearestMeteor;
-    }
-
-    // Fire a laser from the rocket
-    function fireLaser(targetString) {
-        // Find the nearest meteor that matches the string
-        const targetMeteor = findNearestMeteorForString(targetString);
-        
-        if (targetMeteor) {
-            const laser = {
-                startX: gameState.rocketPosition + 40,
-                startY: gameState.rocketY,
-                endX: targetMeteor.x,
-                endY: targetMeteor.y,
-                targetId: targetMeteor.id,
-                timestamp: Date.now()
-            };
-            
-            gameState.laserBeams.push(laser);
-            
-            // Play laser sound
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-            oscillator.type = 'sawtooth';
-            oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-            
-            // Quick volume ramp for a laser sound
-            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
-            
-            oscillator.start();
-            oscillator.stop(audioContext.currentTime + 0.2);
-        }
     }
 
     // Update the volume level indicator with more feedback
@@ -1453,20 +1606,25 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         
         // Convert RMS to percentage (0-100%)
-        const volume = Math.min(100, Math.max(0, rms * 400));
+        const volumePercentage = Math.min(100, Math.max(0, rms * 400));
         
         // Update volume level display
-        elements.volumeLevel.style.width = `${volume}%`;
+        elements.volumeLevel.style.width = `${volumePercentage}%`;
         
         // Add visual feedback based on signal strength
-        if (volume > 80) {
+        if (volumePercentage > CONSTANTS.PLUCK_VOLUME_THRESHOLD * 400) {
+            elements.volumeLevel.style.backgroundColor = 'var(--success)';
+        } else if (volumePercentage > CONSTANTS.RESIDUAL_VOLUME_THRESHOLD * 400) {
             elements.volumeLevel.style.backgroundColor = 'var(--warning)';
-            console.log("High volume detected:", volume.toFixed(1) + "%");
-        } else if (volume > 10) {
-            elements.volumeLevel.style.backgroundColor = 'var(--primary)';
-            console.log("Normal volume detected:", volume.toFixed(1) + "%");
         } else {
             elements.volumeLevel.style.backgroundColor = 'var(--text-secondary)';
+        }
+        
+        // Add threshold markers if they don't exist
+        const volumeContainer = elements.volumeLevel.parentElement;
+        if (volumeContainer && !volumeContainer.querySelector('.threshold-marker')) {
+            addThresholdMarker(volumeContainer, CONSTANTS.PLUCK_VOLUME_THRESHOLD * 400, 'var(--success)', 'PLUCK');
+            addThresholdMarker(volumeContainer, CONSTANTS.RESIDUAL_VOLUME_THRESHOLD * 400, 'var(--warning)', 'MIN');
         }
     }
 
@@ -1668,7 +1826,11 @@ document.addEventListener("DOMContentLoaded", () => {
         
         // Make sure audio context is active
         if (audioContext && audioContext.state === 'suspended') {
-            audioContext.resume();
+            audioContext.resume().then(() => {
+                console.log("Audio context resumed for tutorial");
+            }).catch(err => {
+                console.error("Failed to resume audio context:", err);
+            });
         }
         
         // Ensure tutorial is visible
@@ -1690,22 +1852,20 @@ document.addEventListener("DOMContentLoaded", () => {
             lastDetectionTime: gameState.lastNoteTime
         });
         
-        // Set up string detection with more debug logging
+        // Set up string detection for tutorial
         const stringDetector = setInterval(() => {
             // Get current time for comparison
             const now = Date.now();
             
             // Debug log periodically
-            if (now % 3000 < 100) { // Log roughly every 3 seconds
+            if (now % 3000 < 100) {
                 console.log("Waiting for string:", tutorial.requiredString, 
-                          "Last detected:", gameState.lastNote, 
-                          "Time since detection:", now - gameState.lastNoteTime);
+                           "Last detected:", gameState.lastNote, 
+                           "Time since detection:", now - gameState.lastNoteTime);
             }
             
-            // Check if string was plucked recently (within last 1 second)
-            if (gameState.lastNote === tutorial.requiredString && 
-                now - gameState.lastNoteTime < 1000) {
-                
+            // SPECIAL TUTORIAL CHECK: Use a different detection method for tutorials
+            if (gameState.lastNote === tutorial.requiredString) {
                 console.log(`Successfully detected required string: ${tutorial.requiredString}`);
                 
                 // Clear detection interval
@@ -1717,51 +1877,50 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
                 
                 // Reset active tutorial BEFORE proceeding to avoid race conditions
+                const nextTutorialId = tutorial.nextTutorial;
                 activeTutorial = null;
                 
                 // Use setTimeout to ensure clean state transition
                 setTimeout(() => {
-                    // Handle tutorial progression based on ID
-                    if (tutorial.nextTutorial) {
-                        console.log(`Tutorial ${tutorial.id} completed - showing next tutorial: ${tutorial.nextTutorial}`);
-                        const nextTutorial = tutorials.find(t => t.id === tutorial.nextTutorial);
+                    if (nextTutorialId) {
+                        console.log(`Tutorial ${tutorial.id} completed - showing next tutorial: ${nextTutorialId}`);
+                        const nextTutorial = tutorials.find(t => t.id === nextTutorialId);
                         if (nextTutorial) {
                             showTutorial(nextTutorial);
                         } else {
-                            console.error(`Next tutorial ${tutorial.nextTutorial} not found!`);
-                            // Fallback to start game if tutorial sequence breaks
+                            console.error(`Next tutorial ${nextTutorialId} not found!`);
                             startGame();
                         }
                     } else if (tutorial.id === 'final') {
                         console.log("Final tutorial completed - starting game");
                         startGame();
                     }
-                }, 300); // Short delay to ensure clean transition
+                }, 300);
             }
         }, 100);
         
-        // Add a safety timeout to prevent tutorial from getting stuck
+        // Add safety timeout and emergency button
         setTimeout(() => {
             if (activeTutorial === tutorial) {
                 console.log("Tutorial may be stuck - checking audio system");
                 
-                // Check if audio system is working
                 if (!source || !analyser) {
                     console.log("Audio system disconnected - attempting to reconnect");
                     initAudioContext();
                 }
                 
-                // Add emergency escape option if tutorial seems stuck
                 if (!tutorialElement.querySelector('.emergency-button')) {
                     const emergencyButton = document.createElement('button');
                     emergencyButton.className = 'emergency-button';
                     emergencyButton.textContent = 'SKIP TUTORIAL';
                     emergencyButton.style.marginTop = '15px';
-                    emergencyButton.style.padding = '5px 10px';
+                    emergencyButton.style.padding = '10px 20px';
                     emergencyButton.style.backgroundColor = 'var(--warning)';
                     emergencyButton.style.border = 'none';
                     emergencyButton.style.borderRadius = '5px';
                     emergencyButton.style.cursor = 'pointer';
+                    emergencyButton.style.fontWeight = 'bold';
+                    emergencyButton.style.fontSize = '16px';
                     
                     emergencyButton.onclick = () => {
                         console.log("Emergency escape - skipping tutorial");
@@ -1777,7 +1936,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     console.log("Emergency escape button added");
                 }
             }
-        }, 10000); // Add escape option after 10 seconds
+        }, 10000);
     }
     
     // Add a function to handle game reset and restart
@@ -1792,6 +1951,12 @@ document.addEventListener("DOMContentLoaded", () => {
         gameState.gameOverMode = false;
         gameState.canRestartWithG = false;
         clearTimeout(gameState.restartTimerId);
+        
+        // Reset level system
+        gameState.currentLevel = 1;
+        gameState.gameCompleted = false;
+        gameState.levelGoal = 5000;
+        gameState.availableStrings = [];
     }
 
     // Wait for the low E string to be plucked to start the game
@@ -1812,34 +1977,63 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Initialize audio context
     function initAudioContext() {
-        if (audioContext) {
-            return;
-        }
+        console.log("Initializing audio context...");
         
         try {
-            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                console.log("Created new audio context:", audioContext.state);
+            } else if (audioContext.state === 'suspended') {
+                audioContext.resume().then(() => {
+                    console.log("Resumed existing audio context");
+                });
+            }
             
             navigator.mediaDevices.getUserMedia({ audio: true })
             .then(stream => {
-                analyser = audioContext.createAnalyser();
-                analyser.fftSize = CONSTANTS.FFT_SIZE;
+                console.log("Microphone access granted");
+                
+                if (!analyser) {
+                    analyser = audioContext.createAnalyser();
+                    analyser.fftSize = CONSTANTS.FFT_SIZE;
+                    console.log("Created new analyzer");
+                }
+                
+                if (source) {
+                    source.disconnect();
+                    console.log("Disconnected old source");
+                }
                 
                 source = audioContext.createMediaStreamSource(stream);
                 source.connect(analyser);
+                console.log("Connected new source to analyzer");
                 
-                // Start frequency detection
                 detectFrequency();
                 elements.status.textContent = "AUDIO SYSTEM READY";
             })
             .catch(err => {
                 console.error("Microphone access denied:", err);
                 elements.status.textContent = "ERROR: MICROPHONE ACCESS DENIED - CHECK BROWSER PERMISSIONS";
-                elements.button.disabled = true;
+                elements.button.disabled = false;
+                
+                // Add demo mode button
+                const demoButton = document.createElement('button');
+                demoButton.innerText = "TRY DEMO MODE (NO MIC)";
+                demoButton.style.marginTop = "10px";
+                demoButton.style.padding = "10px";
+                demoButton.style.backgroundColor = "#fbbf24";
+                demoButton.style.color = "black";
+                demoButton.style.border = "none";
+                demoButton.style.borderRadius = "5px";
+                demoButton.style.cursor = "pointer";
+                demoButton.onclick = activateDemoMode;
+                
+                elements.button.parentNode.insertBefore(demoButton, elements.button.nextSibling);
             });
         } catch (e) {
             console.error("Failed to initialize audio:", e);
             elements.status.textContent = "ERROR: FAILED TO INITIALIZE AUDIO SYSTEM";
-            elements.button.disabled = true;
+            elements.button.disabled = false;
         }
     }
 
@@ -2042,6 +2236,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
             }
         }, 500);
+        
+        // Initialize level system
+        gameState.currentLevel = 1;
+        gameState.gameCompleted = false;
+        setupLevelStrings();
     }
 
     // Stop the game with better audio handling
@@ -2253,4 +2452,440 @@ document.addEventListener("DOMContentLoaded", () => {
     // Expose function to window for console debugging
     window.forceStartGame = forceStartGame;
     window.logGameState = logGameState;
+
+    // Add new function to set up available strings for each level
+    function setupLevelStrings() {
+        const stringNames = Object.keys(stringFrequencies);
+        
+        switch(gameState.currentLevel) {
+            case 1:
+                // Level 1: High E and B strings only
+                gameState.availableStrings = stringNames.filter(s => 
+                    s === 'E4' || s === 'B3' || 
+                    s === 'Eb4' || s === 'Bb3'); // Include flat tunings
+                gameState.levelGoal = 5000;
+                break;
+            case 2:
+                // Level 2: G and D strings only
+                gameState.availableStrings = stringNames.filter(s => 
+                    s === 'G3' || s === 'D3' || 
+                    s === 'Gb3' || s === 'Db3'); // Include flat tunings
+                gameState.levelGoal = 5000;
+                break;
+            case 3:
+                // Level 3: A and Low E strings only
+                gameState.availableStrings = stringNames.filter(s => 
+                    s === 'A2' || s === 'E2' || s === 'D2' || 
+                    s === 'Ab2' || s === 'Eb2'); // Include flat and drop D
+                gameState.levelGoal = 5000;
+                break;
+            case 4:
+                // Level 4: All strings
+                gameState.availableStrings = stringNames;
+                gameState.levelGoal = 10000;
+                break;
+            default:
+                // Default - all strings
+                gameState.availableStrings = stringNames;
+                gameState.levelGoal = 5000;
+        }
+        
+        // Update UI to show current level
+        elements.status.textContent = `LEVEL ${gameState.currentLevel}: ${getLevelDescription()}`;
+        
+        console.log(`Level ${gameState.currentLevel} set up with strings:`, gameState.availableStrings);
+    }
+
+    // Helper function to get level description
+    function getLevelDescription() {
+        switch(gameState.currentLevel) {
+            case 1: return "HIGH E & B STRINGS";
+            case 2: return "G & D STRINGS";
+            case 3: return "A & LOW E STRINGS";
+            case 4: return "ALL STRINGS";
+            default: return "CUSTOM LEVEL";
+        }
+    }
+
+    // Add function to draw the level progress
+    function drawLevelProgress() {
+        ctx.save();
+        
+        // Background
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
+        ctx.fillRect(canvas.width / 2 - 150, 10, 300, 40);
+        ctx.strokeStyle = 'rgba(96, 165, 250, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(canvas.width / 2 - 150, 10, 300, 40);
+        
+        // Level text
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 16px Orbitron, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(`LEVEL ${gameState.currentLevel}: ${gameState.score}/${gameState.levelGoal}`, canvas.width / 2, 15);
+        
+        // Progress bar
+        const progressWidth = 280;
+        const progress = Math.min(1, gameState.score / gameState.levelGoal);
+        
+        // Bar background
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.fillRect(canvas.width / 2 - 140, 30, progressWidth, 10);
+        
+        // Progress fill
+        const gradient = ctx.createLinearGradient(
+            canvas.width / 2 - 140, 0,
+            canvas.width / 2 - 140 + progressWidth, 0
+        );
+        gradient.addColorStop(0, '#60a5fa');
+        gradient.addColorStop(1, '#818cf8');
+        
+        ctx.fillStyle = gradient;
+        ctx.fillRect(canvas.width / 2 - 140, 30, progressWidth * progress, 10);
+        
+        ctx.restore();
+    }
+
+    // Add moon landing animation functions
+    function initMoonLanding() {
+        gameState.moonLanding.active = true;
+        gameState.moonLanding.progress = 0;
+        gameState.moonLanding.stars = [];
+        
+        // Create stars for background
+        for (let i = 0; i < 100; i++) {
+            gameState.moonLanding.stars.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                size: Math.random() * 2 + 1,
+                speed: Math.random() * 2 + 1
+            });
+        }
+        
+        // Clear meteors
+        gameState.meteors = [];
+        
+        // Position rocket at the top
+        gameState.rocketY = 50;
+        gameState.rocketPosition = canvas.width / 2;
+        
+        // Play completion sound
+        playCompletionSound();
+        
+        // Start animation
+        requestAnimationFrame(drawMoonLanding);
+    }
+
+    function drawMoonLanding() {
+        if (!gameState.moonLanding.active) return;
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw space background
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw stars
+        gameState.moonLanding.stars.forEach(star => {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.fillRect(star.x, star.y, star.size, star.size);
+        });
+        
+        // Calculate progress
+        gameState.moonLanding.progress += 0.005;
+        const progress = Math.min(1, gameState.moonLanding.progress);
+        
+        // Draw moon
+        const moonRadius = canvas.width * 0.3;
+        const moonY = canvas.height + moonRadius - (moonRadius * 2 * progress);
+        
+        // Moon glow
+        const moonGlow = ctx.createRadialGradient(
+            canvas.width / 2, moonY, moonRadius * 0.8,
+            canvas.width / 2, moonY, moonRadius * 1.2
+        );
+        moonGlow.addColorStop(0, 'rgba(229, 229, 229, 0.3)');
+        moonGlow.addColorStop(1, 'rgba(229, 229, 229, 0)');
+        
+        ctx.fillStyle = moonGlow;
+        ctx.beginPath();
+        ctx.arc(canvas.width / 2, moonY, moonRadius * 1.2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Moon surface
+        const moonGradient = ctx.createRadialGradient(
+            canvas.width / 2, moonY, 0,
+            canvas.width / 2, moonY, moonRadius
+        );
+        moonGradient.addColorStop(0, '#e5e5e5');
+        moonGradient.addColorStop(1, '#a3a3a3');
+        
+        ctx.fillStyle = moonGradient;
+        ctx.beginPath();
+        ctx.arc(canvas.width / 2, moonY, moonRadius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Draw craters
+        const craters = [
+            { x: -0.2, y: -0.3, size: 0.15 },
+            { x: 0.25, y: -0.15, size: 0.1 },
+            { x: -0.1, y: 0.2, size: 0.2 },
+            { x: 0.3, y: 0.25, size: 0.12 }
+        ];
+        
+        craters.forEach(crater => {
+            const craterX = canvas.width / 2 + moonRadius * crater.x;
+            const craterY = moonY + moonRadius * crater.y;
+            const craterSize = moonRadius * crater.size;
+            
+            ctx.fillStyle = 'rgba(100, 100, 100, 0.5)';
+            ctx.beginPath();
+            ctx.arc(craterX, craterY, craterSize, 0, Math.PI * 2);
+            ctx.fill();
+        });
+        
+        // Calculate rocket position
+        const rocketY = canvas.height * (1 - progress) * 0.8;
+        
+        // Draw landing flames if close to surface
+        if (progress > 0.7) {
+            const flameSize = 30 * (1 - ((progress - 0.7) / 0.3));
+            
+            const flameGradient = ctx.createRadialGradient(
+                canvas.width / 2, rocketY + 40, 5,
+                canvas.width / 2, rocketY + 40, flameSize
+            );
+            flameGradient.addColorStop(0, 'rgba(255, 165, 0, 0.9)');
+            flameGradient.addColorStop(0.5, 'rgba(255, 69, 0, 0.5)');
+            flameGradient.addColorStop(1, 'rgba(255, 0, 0, 0)');
+            
+            ctx.fillStyle = flameGradient;
+            ctx.beginPath();
+            ctx.arc(canvas.width / 2, rocketY + 40, flameSize, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Draw rocket (rotated to land vertically)
+        ctx.save();
+        ctx.translate(canvas.width / 2, rocketY);
+        ctx.rotate(Math.PI / 2);
+        
+        // Rocket body (simplified for landing)
+        const bodyGradient = ctx.createLinearGradient(-25, 0, 25, 0);
+        bodyGradient.addColorStop(0, '#60a5fa');
+        bodyGradient.addColorStop(0.5, '#3b82f6');
+        bodyGradient.addColorStop(1, '#1d4ed8');
+        
+        ctx.fillStyle = bodyGradient;
+        ctx.beginPath();
+        ctx.moveTo(0, -40);
+        ctx.lineTo(-15, -20);
+        ctx.lineTo(-15, 30);
+        ctx.lineTo(-8, 40);
+        ctx.lineTo(8, 40);
+        ctx.lineTo(15, 30);
+        ctx.lineTo(15, -20);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Rocket nose cone
+        const noseGradient = ctx.createLinearGradient(0, -40, 0, -60);
+        noseGradient.addColorStop(0, '#3b82f6');
+        noseGradient.addColorStop(1, '#60a5fa');
+        
+        ctx.fillStyle = noseGradient;
+        ctx.beginPath();
+        ctx.moveTo(-15, -20);
+        ctx.lineTo(0, -60);
+        ctx.lineTo(15, -20);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Rocket windows
+        ctx.fillStyle = '#dbeafe';
+        ctx.beginPath();
+        ctx.arc(0, -10, 5, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#bfdbfe';
+        ctx.beginPath();
+        ctx.arc(0, 10, 4, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Landing legs (extend as rocket gets closer to surface)
+        if (progress > 0.5) {
+            const legExtension = Math.min(1, (progress - 0.5) * 2);
+            
+            ctx.strokeStyle = '#94a3b8';
+            ctx.lineWidth = 3;
+            
+            // Left leg
+            ctx.beginPath();
+            ctx.moveTo(-15, 30);
+            ctx.lineTo(-30 * legExtension, 40 * legExtension);
+            ctx.stroke();
+            
+            // Right leg
+            ctx.beginPath();
+            ctx.moveTo(15, 30);
+            ctx.lineTo(30 * legExtension, 40 * legExtension);
+            ctx.stroke();
+            
+            // Feet
+            ctx.fillStyle = '#94a3b8';
+            ctx.beginPath();
+            ctx.arc(-30 * legExtension, 40 * legExtension, 5, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.beginPath();
+            ctx.arc(30 * legExtension, 40 * legExtension, 5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        ctx.restore();
+        
+        // Draw completion message when landed
+        if (progress >= 1) {
+            ctx.save();
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+            ctx.fillRect(canvas.width / 2 - 200, canvas.height / 2 - 50, 400, 100);
+            
+            ctx.strokeStyle = 'rgba(96, 165, 250, 0.8)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(canvas.width / 2 - 200, canvas.height / 2 - 50, 400, 100);
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 24px Orbitron, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('MISSION COMPLETE!', canvas.width / 2, canvas.height / 2 - 20);
+            ctx.font = 'bold 18px Orbitron, sans-serif';
+            ctx.fillText('You have mastered all guitar strings!', canvas.width / 2, canvas.height / 2 + 20);
+            
+            ctx.restore();
+            
+            // Stop animation after landing
+            setTimeout(() => {
+                gameState.moonLanding.active = false;
+                stopGame("MISSION COMPLETE - ALL STRINGS MASTERED!");
+            }, 3000);
+        } else {
+            requestAnimationFrame(drawMoonLanding);
+        }
+    }
+
+    // Add completion sound function
+    function playCompletionSound() {
+        if (!audioContext) return;
+        
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(880, audioContext.currentTime + 0.2);
+        oscillator.frequency.exponentialRampToValueAtTime(1760, audioContext.currentTime + 0.4);
+        oscillator.frequency.exponentialRampToValueAtTime(3520, audioContext.currentTime + 0.6);
+        
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.8);
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + 0.8);
+    }
+
+    // Add emergency recovery functions
+    window.fixGameFreeze = function() {
+        console.log("Manual freeze recovery initiated");
+        
+        if (activeTutorial) {
+            const tutorialElement = document.querySelector('.tutorial-popup');
+            if (tutorialElement && tutorialElement.parentNode) {
+                tutorialElement.parentNode.removeChild(tutorialElement);
+            }
+            activeTutorial = null;
+        }
+        
+        if (audioContext && audioContext.state === 'suspended') {
+            audioContext.resume().then(() => {
+                console.log("Audio context resumed");
+            });
+        }
+        
+        resetGame();
+        
+        if (elements.button) {
+            elements.button.disabled = false;
+            elements.button.textContent = "START MISSION";
+        }
+        
+        if (elements.status) {
+            elements.status.textContent = "READY TO START - PRESS BUTTON";
+        }
+        
+        return "Game state reset - press Start button to begin";
+    };
+
+    // Update keyboard shortcuts
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && activeTutorial) {
+            console.log("Emergency escape triggered with Escape key");
+            const tutorialElement = document.querySelector('.tutorial-popup');
+            if (tutorialElement && tutorialElement.parentNode) {
+                tutorialElement.parentNode.removeChild(tutorialElement);
+            }
+            activeTutorial = null;
+            startGame();
+        }
+        
+        if (event.key === 'r' && gameState.gameOverMode && gameState.canRestartWithG) {
+            console.log("Manual restart triggered with 'r' key");
+            gameState.gameOverMode = false;
+            resetGame();
+            startGame();
+        }
+        
+        if (event.key === 's' && !gameState.isRunning && !activeTutorial) {
+            console.log("Emergency start triggered with 's' key");
+            forceStartGame();
+        }
+    });
+
+    // Expose emergency functions
+    window.forceStartGame = forceStartGame;
+    window.fixGameFreeze = fixGameFreeze;
+
+    console.log("Tutorial and gameplay fixes applied!");
+
+    // Add helper function for threshold markers
+    function addThresholdMarker(container, percentage, color, label) {
+        const marker = document.createElement('div');
+        marker.className = 'threshold-marker';
+        marker.style.position = 'absolute';
+        marker.style.left = `${percentage}%`;
+        marker.style.top = '0';
+        marker.style.bottom = '0';
+        marker.style.width = '2px';
+        marker.style.backgroundColor = color;
+        marker.style.zIndex = '1';
+        
+        const markerLabel = document.createElement('div');
+        markerLabel.className = 'threshold-label';
+        markerLabel.textContent = label;
+        markerLabel.style.position = 'absolute';
+        markerLabel.style.bottom = '-20px';
+        markerLabel.style.left = '50%';
+        markerLabel.style.transform = 'translateX(-50%)';
+        markerLabel.style.fontSize = '10px';
+        markerLabel.style.color = color;
+        markerLabel.style.whiteSpace = 'nowrap';
+        
+        marker.appendChild(markerLabel);
+        container.appendChild(marker);
+    }
 });
