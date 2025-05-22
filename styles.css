@@ -72,7 +72,7 @@ body {
 /* Game Container */
 .game-container {
     width: 100%;
-    max-width: 1200px;
+    max-width: 900px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -82,91 +82,61 @@ body {
     margin: 0 auto;
 }
 
-/* When game is active, adjust container padding */
-.game-running .game-container {
-    padding-top: 10px;
-    padding-bottom: 20px;
-}
-
-/* Game Canvas */
-#gameCanvas {
-    width: 100%;
-    max-width: 1000px;
-    height: auto;
-    background-color: rgba(0, 0, 0, 0.3);
-    border: 2px solid var(--primary);
-    border-radius: 10px;
-    box-shadow: 0 0 20px rgba(96, 165, 250, 0.3);
-    margin: 1rem auto;
-    display: block;
-    scroll-margin-top: 2rem;
-}
-
-/* Controls and Status */
-.game-controls {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 1rem;
-    width: 100%;
-    max-width: 1000px;
+/* Game Header with Integrated Controls */
+.game-header {
+    text-align: center;
     margin-bottom: 1rem;
-    background: rgba(15, 23, 42, 0.95);
-    backdrop-filter: blur(10px);
-    border-radius: 10px;
-    padding: 1rem;
-    position: sticky;
-    top: 10px;
-    z-index: 10;
-}
-
-.control-panel, .status-panel {
-    flex: 1;
-    min-width: 0;
-    max-width: 48%;
     background: rgba(15, 23, 42, 0.8);
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(96, 165, 250, 0.2);
-    border-radius: 10px;
+    border: 1px solid rgba(96, 165, 250, 0.3);
+    border-radius: 8px;
     padding: 1rem;
+    width: 100%;
 }
 
-.panel-title {
+.game-title {
     font-family: 'Orbitron', sans-serif;
-    font-size: 1rem;
-    color: var(--text-primary);
-    margin-bottom: 0.5rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+    font-size: 2rem;
+    font-weight: 700;
+    background: linear-gradient(90deg, var(--primary), var(--accent));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    margin-bottom: 1rem;
+    text-shadow: 0 0 20px rgba(96, 165, 250, 0.5);
 }
 
-/* Tuning Selector */
-.tuning-selector {
-    margin-bottom: 1rem;
+.compact-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: center;
+    max-width: 400px;
+    margin: 0 auto;
 }
 
 .tuning-dropdown {
     width: 100%;
-    padding: 0.75rem;
+    max-width: 250px;
+    padding: 0.5rem;
     background: rgba(30, 41, 59, 0.8);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
+    border-radius: 6px;
     color: var(--text-primary);
     font-family: 'Orbitron', sans-serif;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
 }
 
-/* Start Button - Enhanced Styles */
-#startButton {
+.start-button {
     width: 100%;
-    padding: 0.75rem;
+    max-width: 250px;
+    padding: 0.75rem 1.5rem;
     background: linear-gradient(145deg, #22c55e 0%, #16a34a 100%);
     border: 2px solid #22c55e;
-    border-radius: 8px;
+    border-radius: 6px;
     color: white;
     font-family: 'Orbitron', sans-serif;
-    font-size: 1.1rem;
+    font-size: 1rem;
     font-weight: bold;
     letter-spacing: 1px;
     cursor: pointer;
@@ -175,15 +145,18 @@ body {
     animation: pulse 2s infinite;
 }
 
-#startButton:hover {
+.start-button:hover {
     background: linear-gradient(145deg, #16a34a 0%, #22c55e 100%);
-    transform: translateY(-3px);
-    box-shadow: 0 5px 15px rgba(34, 197, 94, 0.6);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(34, 197, 94, 0.6);
 }
 
-#startButton:active {
-    transform: translateY(0);
-    box-shadow: 0 0 10px rgba(34, 197, 94, 0.4);
+.start-button:disabled {
+    background: rgba(100, 100, 100, 0.5);
+    border-color: rgba(100, 100, 100, 0.5);
+    cursor: not-allowed;
+    animation: none;
+    transform: none;
 }
 
 @keyframes pulse {
@@ -191,301 +164,90 @@ body {
     50% { box-shadow: 0 0 25px rgba(34, 197, 94, 0.8); }
 }
 
-/* Telemetry Grid */
-.telemetry-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.75rem;
-    width: 100%;
+.game-stats {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
 }
 
-.telemetry-box {
-    background: rgba(30, 41, 59, 0.6);
-    padding: 0.75rem;
-    border-radius: 8px;
-    text-align: center;
-}
-
-.telemetry-label {
+.stat-item {
     font-family: 'Orbitron', sans-serif;
     font-size: 0.8rem;
-    color: var(--text-secondary);
-    margin-bottom: 0.25rem;
-}
-
-.telemetry-value {
-    font-family: 'Orbitron', sans-serif;
-    font-size: 1.25rem;
-    font-weight: 700;
-    background: linear-gradient(90deg, var(--primary), var(--accent));
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-}
-
-/* Status Bar */
-.status-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-    padding: 0.5rem;
-    background: rgba(30, 41, 59, 0.4);
-    border-radius: 8px;
-}
-
-.status-indicator {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.status-light {
-    width: 12px;
-    height: 12px;
-    background: var(--warning);
-    border-radius: 50%;
-    animation: blink 2s infinite;
-}
-
-@keyframes blink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-}
-
-/* Mission Timer */
-.mission-time {
-    font-family: 'Orbitron', sans-serif;
-    font-size: 1rem;
-    color: var(--text-secondary);
-}
-
-/* Signal Monitor */
-.signal-monitor {
-    position: relative;
-    margin-top: 1rem;
-    padding-bottom: 15px;
-}
-
-.signal-bar {
-    height: 10px;
+    font-weight: 600;
+    color: var(--text-primary);
     background: rgba(30, 41, 59, 0.6);
-    border-radius: 5px;
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    border: 1px solid rgba(96, 165, 250, 0.2);
+}
+
+.stat-item span {
+    color: var(--primary);
+    font-weight: 700;
+}
+
+.volume-monitor {
+    margin-top: 0.75rem;
+    background: rgba(30, 41, 59, 0.4);
+    border-radius: 6px;
+    padding: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.current-note {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.9rem;
+    color: var(--primary) !important;
+    font-weight: bold !important;
+    min-width: 80px;
+    text-align: center;
+    background: rgba(96, 165, 250, 0.1);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    border: 1px solid rgba(96, 165, 250, 0.3);
+}
+
+.volume-bar {
+    flex: 1;
+    height: 6px;
+    background: rgba(30, 41, 59, 0.6);
+    border-radius: 3px;
     overflow: hidden;
     position: relative;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.signal-level {
+.volume-level {
     height: 100%;
     background: linear-gradient(90deg, var(--primary), var(--accent));
     width: 0%;
     transition: width 0.1s ease-out;
 }
 
-/* Volume Indicator Styles */
-.signal-monitor {
-    position: relative;
-    margin-top: 1.5rem !important;
-    padding-bottom: 25px !important;
-}
-
-.signal-bar {
-    height: 12px !important;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    position: relative;
-}
-
-.threshold-marker {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    z-index: 2;
-}
-
-.threshold-label {
-    position: absolute;
-    bottom: -20px;
-    white-space: nowrap;
-    font-size: 10px;
-    font-weight: bold;
-    font-family: 'Orbitron', sans-serif;
-}
-
-.signal-monitor::before {
-    content: "VOLUME";
-    position: absolute;
-    top: -20px;
-    left: 20px;
-    font-size: 12px;
-    font-family: 'Orbitron', sans-serif;
-    color: var(--text-secondary);
-}
-
-.pluck-indicator {
-    position: absolute;
-    top: -18px;
-    right: 10px;
-    font-size: 12px;
-    font-family: 'Orbitron', sans-serif;
-    color: var(--success);
-    opacity: 0;
-    transition: opacity 0.3s;
-}
-
-.pluck-indicator.active {
-    opacity: 1;
-}
-
-/* Status Message */
-#status {
+/* Game Canvas */
+#gameCanvas {
     width: 100%;
-    padding: 0.75rem;
-    margin-top: 1rem;
-    background: rgba(30, 41, 59, 0.6);
-    border-radius: 8px;
-    font-family: 'Orbitron', sans-serif;
-    text-align: center;
-    color: var(--warning);
-}
-
-/* Instructions Panel */
-.instructions {
-    margin-top: 1.5rem;
-    background: rgba(15, 23, 42, 0.8);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(96, 165, 250, 0.2);
-    border-radius: 10px;
-    padding: 1rem;
-    width: 100%;
-}
-
-.instructions h2 {
-    font-family: 'Orbitron', sans-serif;
-    font-size: 1.25rem;
-    margin-bottom: 0.5rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.instructions p {
-    color: var(--text-secondary);
-    margin-bottom: 0.5rem;
-    line-height: 1.5;
-}
-
-.instructions ul {
-    margin-left: 1.5rem;
-    margin-bottom: 0.5rem;
-}
-
-.instructions li {
-    color: var(--text-secondary);
-    margin-bottom: 0.25rem;
-}
-
-/* Tutorial Popup - Updated for string-based interactions */
-.tutorial-popup {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    padding: 20px;
-    background: rgba(15, 23, 42, 0.9);
+    max-width: 800px;
+    height: auto;
+    background-color: rgba(0, 0, 0, 0.3);
     border: 2px solid var(--primary);
-    border-radius: 10px;
-    color: white;
-    font-family: 'Orbitron', sans-serif;
-    z-index: 100;
-    max-width: 80%;
-    text-align: center;
-    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    border-radius: 8px;
+    box-shadow: 0 0 20px rgba(96, 165, 250, 0.3);
+    margin: 0 auto;
+    display: block;
 }
 
-.tutorial-popup h3 {
-    margin-bottom: 10px;
-    color: var(--primary);
-}
-
-.tutorial-popup p {
-    margin-bottom: 15px;
-    line-height: 1.5;
-}
-
-.string-instruction {
-    color: var(--warning);
-    font-weight: bold;
-    margin-bottom: 10px;
-    padding: 10px;
-    border: 1px dashed var(--warning);
-    border-radius: 5px;
-    animation: pulse 2s infinite;
-}
-
-.string-detection-indicator {
-    font-size: 0.8rem;
-    color: var(--text-secondary);
-    margin-top: 10px;
-}
-
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.6; }
-}
-
-/* Responsive Adjustments */
-@media (max-width: 768px) {
-    .game-container {
-        padding: 0.5rem;
-    }
-    
-    .game-controls {
-        flex-direction: column;
-        padding: 0.75rem;
-    }
-    
-    .control-panel, .status-panel {
-        width: 100%;
-        max-width: 100%;
-        margin-bottom: 0.75rem;
-    }
-    
-    .game-title {
-        font-size: 1.75rem;
-    }
-    
-    #gameCanvas {
-        margin: 0.5rem auto;
-        border-radius: 8px;
-    }
-}
-
-/* Ensure proper scrolling behavior */
-html {
-    scroll-behavior: smooth;
-    overflow-y: auto;
-    overflow-x: hidden;
-}
-
-/* Fix sticky positioning */
-.game-controls.sticky {
-    position: -webkit-sticky;
-    position: sticky;
-    top: 10px;
-    background: rgba(15, 23, 42, 0.98);
-    backdrop-filter: blur(15px);
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    transition: background-color 0.3s ease;
-}
-
-/* Ensure canvas maintains aspect ratio */
+/* Canvas container adjustments */
 .canvas-container {
     width: 100%;
-    max-width: 1000px;
+    max-width: 800px;
     margin: 0 auto;
     position: relative;
-    padding-top: 60%; /* 5:3 aspect ratio */
+    padding-top: 48%; /* Compact aspect ratio */
 }
 
 .canvas-container #gameCanvas {
@@ -495,6 +257,89 @@ html {
     width: 100%;
     height: 100%;
     object-fit: contain;
+    border-radius: 6px;
+}
+
+/* Status message styling */
+#status {
+    width: 100%;
+    max-width: 800px;
+    margin: 0.5rem auto 0;
+    padding: 0.5rem;
+    background: rgba(30, 41, 59, 0.6);
+    border-radius: 6px;
+    font-family: 'Orbitron', sans-serif;
+    text-align: center;
+    color: var(--warning);
+    border: 1px solid rgba(96, 165, 250, 0.2);
+    font-size: 0.9rem;
+}
+
+/* Tutorial Popup - Updated for string-based interactions */
+.tutorial-popup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 15px 20px;
+    background: rgba(15, 23, 42, 0.95);
+    border: 2px solid var(--primary);
+    border-radius: 8px;
+    color: white;
+    font-family: 'Orbitron', sans-serif;
+    z-index: 100;
+    max-width: 350px;
+    text-align: center;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.7);
+}
+
+.tutorial-popup h3 {
+    margin-bottom: 8px;
+    color: var(--primary);
+    font-size: 1.2rem;
+}
+
+.tutorial-popup p {
+    margin-bottom: 12px;
+    line-height: 1.4;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.string-instruction {
+    color: var(--warning);
+    font-weight: bold;
+    font-size: 1.1rem;
+    margin-bottom: 8px;
+    padding: 8px 12px;
+    border: 2px solid var(--warning);
+    border-radius: 5px;
+    animation: pulse 1.5s infinite;
+    background: rgba(251, 191, 36, 0.1);
+}
+
+.string-detection-indicator {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    margin-top: 8px;
+    opacity: 0.8;
+}
+
+.emergency-button {
+    margin-top: 10px !important;
+    padding: 8px 16px !important;
+    background: var(--danger) !important;
+    border: none !important;
+    border-radius: 4px !important;
+    cursor: pointer !important;
+    font-weight: bold !important;
+    font-size: 0.9rem !important;
+    color: white !important;
+    font-family: 'Orbitron', sans-serif !important;
+}
+
+.emergency-button:hover {
+    background: #dc2626 !important;
 }
 
 /* Game Over State */
@@ -510,13 +355,105 @@ html {
     color: var(--warning);
 }
 
-@keyframes pulse {
-    0%, 100% { opacity: 1; border-color: var(--warning); }
-    50% { opacity: 0.8; border-color: var(--danger); }
-}
-
 @keyframes flash-danger {
     0% { opacity: 0; }
     50% { opacity: 1; }
     100% { opacity: 0; }
+}
+
+/* Moon Landing Styles */
+body.moon-landing-mode {
+    background-color: #0f172a;
+    transition: background-color 1s ease;
+}
+
+body.moon-landing-mode .game-container {
+    filter: brightness(0.8) contrast(1.2);
+    transition: filter 1s ease;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .game-title {
+        font-size: 1.5rem;
+    }
+    
+    .game-stats {
+        gap: 0.5rem;
+    }
+    
+    .stat-item {
+        font-size: 0.7rem;
+        padding: 0.3rem 0.6rem;
+    }
+    
+    .compact-controls {
+        gap: 0.5rem;
+    }
+    
+    .canvas-container {
+        padding-top: 55%; /* Slightly taller on mobile */
+    }
+    
+    .volume-monitor {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .volume-bar {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .game-title {
+        font-size: 1.2rem;
+    }
+    
+    .game-stats {
+        flex-direction: column;
+        gap: 0.25rem;
+        align-items: center;
+    }
+    
+    .stat-item {
+        width: 100%;
+        max-width: 150px;
+        text-align: center;
+    }
+}
+
+/* Hide old elements that we removed */
+.game-controls,
+.instructions {
+    display: none !important;
+}
+
+/* Ensure proper scrolling behavior */
+html {
+    scroll-behavior: smooth;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Enhanced Lives Display */
+.stat-item:has(#livesDisplay) {
+    background: linear-gradient(145deg, rgba(34, 197, 94, 0.2), rgba(96, 165, 250, 0.2)) !important;
+    border-color: #22c55e !important;
+    position: relative;
+}
+
+.stat-item:has(#livesDisplay)::after {
+    content: "🛡️";
+    position: absolute;
+    right: -15px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.8rem;
+    animation: shield-glow 2s ease-in-out infinite;
+}
+
+@keyframes shield-glow {
+    0%, 100% { opacity: 0.6; transform: translateY(-50%) scale(1); }
+    50% { opacity: 1; transform: translateY(-50%) scale(1.1); }
 }
